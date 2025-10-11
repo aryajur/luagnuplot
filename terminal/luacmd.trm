@@ -1,0 +1,320 @@
+/* GNUPLOT - luacmd.trm */
+
+/*[
+ * Copyright 2025
+ *
+ * Permission to use, copy, and distribute this software and its
+ * documentation for any purpose with or without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and
+ * that both that copyright notice and this permission notice appear
+ * in supporting documentation.
+ *
+ * This software is provided "as is" without express or implied warranty
+ * to the extent permitted by applicable law.
+]*/
+
+/*
+ * This terminal captures drawing commands and makes them available
+ * to Lua for rendering with any Lua graphics library (wxLua, Cairo,
+ * SVG, JSON, etc.). This provides high-quality output without file I/O.
+ */
+
+#include "driver.h"
+
+#ifdef TERM_REGISTER
+register_term(luacmd)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void LUACMD_options(void);
+TERM_PUBLIC void LUACMD_init(void);
+TERM_PUBLIC void LUACMD_graphics(void);
+TERM_PUBLIC void LUACMD_text(void);
+TERM_PUBLIC void LUACMD_reset(void);
+TERM_PUBLIC void LUACMD_linetype(int linetype);
+TERM_PUBLIC void LUACMD_move(unsigned int x, unsigned int y);
+TERM_PUBLIC void LUACMD_vector(unsigned int x, unsigned int y);
+TERM_PUBLIC void LUACMD_put_text(unsigned int x, unsigned int y, const char *str);
+TERM_PUBLIC void LUACMD_set_color(t_colorspec *colorspec);
+TERM_PUBLIC void LUACMD_linewidth(double linewidth);
+TERM_PUBLIC void LUACMD_point(unsigned int x, unsigned int y, int pointstyle);
+TERM_PUBLIC void LUACMD_fillbox(int style, unsigned int x1, unsigned int y1,
+                                unsigned int width, unsigned int height);
+TERM_PUBLIC void LUACMD_filled_polygon(int n, gpiPoint *corners);
+TERM_PUBLIC int LUACMD_justify_text(enum JUSTIFY mode);
+TERM_PUBLIC int LUACMD_text_angle(float ang);
+TERM_PUBLIC int LUACMD_set_font(const char *font);
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
+/* Forward declare command capture functions from libgnuplot */
+extern void luacmd_add_command(int type, int x1, int y1, int x2, int y2,
+                              const char *text, unsigned int color, double value);
+extern void luacmd_clear_commands(void);
+extern void luacmd_begin_plot(int width, int height);
+extern void luacmd_end_plot(void);
+
+/* Terminal state */
+static int luacmd_width = 800;
+static int luacmd_height = 600;
+static unsigned int luacmd_current_x = 0;
+static unsigned int luacmd_current_y = 0;
+static unsigned int luacmd_current_color = 0x000000;
+static double luacmd_current_linewidth = 1.0;
+static int luacmd_current_linetype = 0;
+
+/* Command types - must match Lua side */
+#define CMD_MOVE 0
+#define CMD_VECTOR 1
+#define CMD_TEXT 2
+#define CMD_COLOR 3
+#define CMD_LINEWIDTH 4
+#define CMD_LINETYPE 5
+#define CMD_POINT 6
+#define CMD_FILLBOX 7
+#define CMD_FILLED_POLYGON 8
+#define CMD_TEXT_ANGLE 9
+#define CMD_JUSTIFY 10
+#define CMD_SET_FONT 11
+
+TERM_PUBLIC void
+LUACMD_options(void)
+{
+    while (!END_OF_COMMAND) {
+        if (almost_equals(c_token, "s$ize")) {
+            c_token++;
+            if (END_OF_COMMAND) {
+                int_error(c_token, "size requires 'width,height'");
+            }
+            luacmd_width = (int)real_expression();
+            if (!equals(c_token++, ",")) {
+                int_error(c_token, "size requires 'width,height'");
+            }
+            luacmd_height = (int)real_expression();
+        } else {
+            int_error(c_token, "unrecognized option");
+        }
+    }
+
+    /* Update terminal dimensions - CRITICAL for correct scaling! */
+    term->xmax = luacmd_width;
+    term->ymax = luacmd_height;
+
+    sprintf(term_options, "size %d,%d", luacmd_width, luacmd_height);
+}
+
+TERM_PUBLIC void
+LUACMD_init(void)
+{
+    /* Nothing to initialize */
+}
+
+TERM_PUBLIC void
+LUACMD_graphics(void)
+{
+    /* Clear previous commands and start new plot */
+    luacmd_clear_commands();
+    luacmd_begin_plot(luacmd_width, luacmd_height);
+
+    luacmd_current_x = 0;
+    luacmd_current_y = 0;
+    luacmd_current_color = 0x000000;
+    luacmd_current_linewidth = 1.0;
+}
+
+TERM_PUBLIC void
+LUACMD_text(void)
+{
+    /* Mark end of plot */
+    luacmd_end_plot();
+}
+
+TERM_PUBLIC void
+LUACMD_reset(void)
+{
+    /* Cleanup */
+    luacmd_clear_commands();
+}
+
+TERM_PUBLIC void
+LUACMD_linetype(int linetype)
+{
+    luacmd_current_linetype = linetype;
+    luacmd_add_command(CMD_LINETYPE, linetype, 0, 0, 0, NULL, 0, 0.0);
+}
+
+TERM_PUBLIC void
+LUACMD_move(unsigned int x, unsigned int y)
+{
+    luacmd_current_x = x;
+    luacmd_current_y = term->ymax - y;  /* Flip Y coordinate */
+
+    luacmd_add_command(CMD_MOVE, luacmd_current_x, luacmd_current_y,
+                     0, 0, NULL, 0, 0.0);
+}
+
+TERM_PUBLIC void
+LUACMD_vector(unsigned int x, unsigned int y)
+{
+    unsigned int new_x = x;
+    unsigned int new_y = term->ymax - y;  /* Flip Y coordinate */
+
+    luacmd_add_command(CMD_VECTOR, new_x, new_y,
+                     luacmd_current_x, luacmd_current_y, NULL, luacmd_current_color, luacmd_current_linewidth);
+
+    luacmd_current_x = new_x;
+    luacmd_current_y = new_y;
+}
+
+TERM_PUBLIC void
+LUACMD_put_text(unsigned int x, unsigned int y, const char *str)
+{
+    unsigned int flipped_y = term->ymax - y;
+    luacmd_add_command(CMD_TEXT, x, flipped_y, 0, 0, str, luacmd_current_color, 0.0);
+}
+
+TERM_PUBLIC void
+LUACMD_set_color(t_colorspec *colorspec)
+{
+    if (colorspec->type == TC_RGB) {
+        /* For TC_RGB, the RGB value is stored in lt field */
+        luacmd_current_color = (unsigned int)colorspec->lt;
+    } else if (colorspec->type == TC_LT) {
+        /* Map line type to color */
+        int lt = colorspec->lt;
+
+        /* Handle border/axis line types (negative values) */
+        if (lt < 0) {
+            luacmd_current_color = 0x000000;  /* Black for borders/axes */
+        } else {
+            /* Map positive line types to plot colors */
+            static unsigned int lt_colors[] = {
+                0xFF0000, 0x00FF00, 0x0000FF, 0xFF00FF,
+                0x00FFFF, 0xFFFF00, 0x000000, 0xFFFFFF
+            };
+            if (lt < 8) {
+                luacmd_current_color = lt_colors[lt];
+            } else {
+                luacmd_current_color = 0x000000;  /* Default to black */
+            }
+        }
+    }
+
+    luacmd_add_command(CMD_COLOR, 0, 0, 0, 0, NULL, luacmd_current_color, 0.0);
+}
+
+TERM_PUBLIC void
+LUACMD_linewidth(double linewidth)
+{
+    luacmd_current_linewidth = linewidth;
+    luacmd_add_command(CMD_LINEWIDTH, 0, 0, 0, 0, NULL, 0, linewidth);
+}
+
+TERM_PUBLIC void
+LUACMD_point(unsigned int x, unsigned int y, int pointstyle)
+{
+    unsigned int flipped_y = term->ymax - y;
+    luacmd_add_command(CMD_POINT, x, flipped_y, 0, 0, NULL, luacmd_current_color, (double)pointstyle);
+}
+
+TERM_PUBLIC void
+LUACMD_fillbox(int style, unsigned int x1, unsigned int y1,
+              unsigned int width, unsigned int height)
+{
+    unsigned int flipped_y = term->ymax - y1 - height;
+    luacmd_add_command(CMD_FILLBOX, x1, flipped_y, width, height, NULL, luacmd_current_color, (double)style);
+}
+
+TERM_PUBLIC void
+LUACMD_filled_polygon(int n, gpiPoint *corners)
+{
+    /* For now, store as a series of points in a special command */
+    /* This is simplified - a real implementation would store all points */
+    if (n > 0) {
+        unsigned int flipped_y = term->ymax - corners[0].y;
+        luacmd_add_command(CMD_FILLED_POLYGON, corners[0].x, flipped_y, n, 0, NULL, luacmd_current_color, 0.0);
+    }
+}
+
+TERM_PUBLIC int
+LUACMD_justify_text(enum JUSTIFY mode)
+{
+    luacmd_add_command(CMD_JUSTIFY, (int)mode, 0, 0, 0, NULL, 0, 0.0);
+    return TRUE;
+}
+
+TERM_PUBLIC int
+LUACMD_text_angle(float ang)
+{
+    luacmd_add_command(CMD_TEXT_ANGLE, 0, 0, 0, 0, NULL, 0, (double)ang);
+    return TRUE;
+}
+
+TERM_PUBLIC int
+LUACMD_set_font(const char *font)
+{
+    luacmd_add_command(CMD_SET_FONT, 0, 0, 0, 0, font, 0, 0.0);
+    return TRUE;
+}
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(luacmd_driver)
+    "luacmd", "Lua command capture terminal for flexible rendering",
+    800 /* xmax */, 600 /* ymax */, 14 /* vchar */, 8 /* hchar */,
+    5 /* vtic */, 5 /* htic */,
+    LUACMD_options, LUACMD_init, LUACMD_reset, LUACMD_text,
+    null_scale, LUACMD_graphics, LUACMD_move, LUACMD_vector,
+    LUACMD_linetype, LUACMD_put_text, LUACMD_text_angle,
+    LUACMD_justify_text, LUACMD_point, do_arrow, LUACMD_set_font,
+    do_pointsize,
+    TERM_CAN_MULTIPLOT | TERM_LINEWIDTH | TERM_FONTSCALE,
+    0 /* suspend */, 0 /* resume */,
+    LUACMD_fillbox, LUACMD_linewidth,
+#ifdef USE_MOUSE
+    0, 0, 0, 0, 0,
+#endif
+    0 /* make_palette */, 0 /* previous_palette */,
+    LUACMD_set_color, LUACMD_filled_polygon
+TERM_TABLE_END(luacmd_driver)
+
+#undef LAST_TERM
+#define LAST_TERM luacmd_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(luacmd)
+"1 luacmd",
+"?commands set terminal luacmd",
+"?set terminal luacmd",
+"?set term luacmd",
+"?terminal luacmd",
+"?term luacmd",
+"?luacmd",
+" The `luacmd` terminal captures drawing commands for rendering with Lua.",
+" Commands can be rendered using any Lua graphics library (wxLua, Cairo, SVG,",
+" JSON, etc.). This provides flexible, high-quality output without file I/O.",
+"",
+" Syntax:",
+"       set terminal luacmd {size <width>,<height>}",
+"",
+" The size defaults to 800x600 pixels.",
+"",
+" After plotting, use gnuplot.get_commands() in Lua to retrieve the drawing",
+" commands, then render them using your preferred graphics library.",
+"",
+" Example:",
+"       set terminal luacmd size 1000,700",
+"       plot sin(x)",
+"       # In Lua: local result = gnuplot.get_commands()",
+"",
+" The commands include move, vector (line), text, color, linewidth, etc.",
+" See examples/wxlua_plot_perfect.lua for wxLua rendering example."
+END_HELP(luacmd)
+#endif /* TERM_HELP */

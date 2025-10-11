@@ -12,7 +12,7 @@ print("=== wxLua Plot - Final Optimized ===\n")
 -- Generate plot
 print("1. Generating plot...")
 gnuplot.init()
-gnuplot.cmd("set terminal wxlua size 1000,700")
+gnuplot.cmd("set terminal luacmd size 1000,700")
 gnuplot.cmd("set title 'Beautiful Mathematical Functions'")
 gnuplot.cmd("set xlabel 'x'")
 gnuplot.cmd("set ylabel 'y'")

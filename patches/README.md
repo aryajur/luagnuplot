@@ -4,7 +4,7 @@ This directory contains patch files that need to be applied to the gnuplot sourc
 
 ## term.h.patch
 
-This patch adds the wxLua terminal to gnuplot's terminal list by including `wxlua.trm` in `src/term.h`.
+This patch adds the luacmd terminal to gnuplot's terminal list by including `wxlua.trm` in `src/term.h`.
 
 The build script will automatically:
 1. Copy `terminal/wxlua.trm` to `gnuplot-source/term/`

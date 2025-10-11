@@ -16,7 +16,7 @@ This document explores an alternative terminal architecture that was considered 
 
 ## Overview
 
-The **current wxlua terminal architecture** uses a **command buffering** approach:
+The **current luacmd terminal architecture** uses a **command buffering** approach:
 
 1. gnuplot calls terminal functions (move, vector, text, etc.)
 2. Terminal stores commands in a C array
@@ -425,7 +425,7 @@ Each format requires re-plotting from scratch!
 local gnuplot = require("gnuplot")
 
 -- Get commands ONCE
-gnuplot.cmd("set terminal wxlua size 800,600")
+gnuplot.cmd("set terminal luacmd size 800,600")
 gnuplot.cmd("plot sin(x)")
 local result = gnuplot.get_commands()
 

@@ -5,7 +5,7 @@ This document covers advanced topics including terminal architecture, the RGB fe
 ## Table of Contents
 
 - [Gnuplot Terminal Architecture](#gnuplot-terminal-architecture)
-- [wxLua Terminal Implementation](#wxlua-terminal-implementation)
+- [luacmd Terminal Implementation](#luacmd-terminal-implementation)
 - [RGB Data Access Feature](#rgb-data-access-feature)
 - [Creating Custom Terminals](#creating-custom-terminals)
 
@@ -35,7 +35,7 @@ All terminals implement a standard API of function pointers:
 
 ```c
 struct termentry {
-    const char *name;              // Terminal name (e.g., "wxlua", "svg")
+    const char *name;              // Terminal name (e.g., "luacmd", "svg")
     const char *description;       // Description
 
     // Lifecycle
@@ -74,7 +74,7 @@ struct termentry {
 
 When you execute `plot sin(x)`:
 
-1. **Terminal Selection**: `set terminal wxlua size 800,600`
+1. **Terminal Selection**: `set terminal luacmd size 800,600`
    - Calls `term->init()` to set up the terminal
    - Sets canvas size (`xmax`, `ymax`)
 
@@ -95,7 +95,7 @@ When you execute `plot sin(x)`:
    - Exit graphics mode
    - Write output file, flush buffers, etc.
 
-### How the wxlua Terminal Works
+### How the luacmd Terminal Works
 
 #### Key Concept: Terminals Receive Drawing Primitives, Not Commands
 
@@ -115,7 +115,7 @@ The terminal only receives **low-level drawing primitives** like:
 
 Think of it like this: Gnuplot is a painter who has already planned the entire painting. The terminal is just the brush that makes the marks on canvas.
 
-#### How wxlua Differs from Normal Terminals
+#### How luacmd Differs from Normal Terminals
 
 **Normal terminals (like PNG):**
 ```
@@ -124,13 +124,13 @@ Think of it like this: Gnuplot is a painter who has already planned the entire p
 3. Result: PNG file created immediately
 ```
 
-**wxlua terminal (memory-based):**
+**luacmd terminal (memory-based):**
 ```
 1. gnuplot calls drawing functions
 2. Terminal RECORDS commands instead of drawing
 3. Commands stored in memory array
 4. Lua calls gnuplot.get_commands() to retrieve them
-5. Lua does the actual rendering using wxWidgets
+5. Lua does the actual rendering using any graphics library
 ```
 
 **Why this design?** Because we're using gnuplot as a library, not a standalone program. We want Lua to control when and how rendering happens, giving us flexibility for GUI integration, animation, custom styling, etc.
@@ -160,20 +160,20 @@ Here's the complete journey from Lua command to rendered graphics:
 └────────────────┬────────────────────────────────────────────┘
                  ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. gnuplot calls wxlua terminal functions:                 │
-│    WXLUA_graphics()    ← "Start rendering"                 │
-│    WXLUA_move(50, 100) ← "Move pen to (50,100)"            │
-│    WXLUA_vector(51,105)← "Draw line to (51,105)"           │
-│    WXLUA_set_color(RED)← "Change color to red"             │
-│    WXLUA_put_text(...)← "Draw text label"                  │
-│    WXLUA_text()        ← "Done rendering"                  │
+│ 4. gnuplot calls luacmd terminal functions:                 │
+│    LUACMD_graphics()    ← "Start rendering"                 │
+│    LUACMD_move(50, 100) ← "Move pen to (50,100)"            │
+│    LUACMD_vector(51,105)← "Draw line to (51,105)"           │
+│    LUACMD_set_color(RED)← "Change color to red"             │
+│    LUACMD_put_text(...)← "Draw text label"                  │
+│    LUACMD_text()        ← "Done rendering"                  │
 └────────────────┬────────────────────────────────────────────┘
                  ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. Each wxlua terminal function calls back to libgnuplot:  │
-│    wxlua_add_command(CMD_MOVE, 50, 100, ...)               │
-│    wxlua_add_command(CMD_VECTOR, 51, 105, ...)             │
-│    wxlua_add_command(CMD_COLOR, 0xFF0000, ...)             │
+│ 5. Each luacmd terminal function calls back to libgnuplot: │
+│    luacmd_add_command(CMD_MOVE, 50, 100, ...)               │
+│    luacmd_add_command(CMD_VECTOR, 51, 105, ...)             │
+│    luacmd_add_command(CMD_COLOR, 0xFF0000, ...)             │
 └────────────────┬────────────────────────────────────────────┘
                  ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -215,21 +215,21 @@ gnuplot.cmd("plot sin(x)")
 The terminal does **NOT** see "plot sin(x)". Instead, it receives approximately 2,500 function calls like:
 
 ```c
-WXLUA_graphics()
-WXLUA_linewidth(1.0)
-WXLUA_set_color(BLACK)
-WXLUA_move(100, 300)      // Start of axis
-WXLUA_vector(700, 300)    // Draw X axis
-WXLUA_move(100, 100)      // Start of Y axis
-WXLUA_vector(100, 500)    // Draw Y axis
-WXLUA_set_color(BLUE)     // First plot line
-WXLUA_linewidth(2.0)
-WXLUA_move(100, 300)      // sin(x) starts
-WXLUA_vector(101, 305)    // sin(x) point 2
-WXLUA_vector(102, 310)    // sin(x) point 3
+LUACMD_graphics()
+LUACMD_linewidth(1.0)
+LUACMD_set_color(BLACK)
+LUACMD_move(100, 300)      // Start of axis
+LUACMD_vector(700, 300)    // Draw X axis
+LUACMD_move(100, 100)      // Start of Y axis
+LUACMD_vector(100, 500)    // Draw Y axis
+LUACMD_set_color(BLUE)     // First plot line
+LUACMD_linewidth(2.0)
+LUACMD_move(100, 300)      // sin(x) starts
+LUACMD_vector(101, 305)    // sin(x) point 2
+LUACMD_vector(102, 310)    // sin(x) point 3
 // ... 497 more vectors for the curve
-WXLUA_put_text(400, 50, "sin(x)")  // Label
-WXLUA_text()
+LUACMD_put_text(400, 50, "sin(x)")  // Label
+LUACMD_text()
 ```
 
 The terminal has no knowledge of mathematics, functions, or commands. It's purely a drawing interface.
@@ -240,39 +240,40 @@ The terminal has no knowledge of mathematics, functions, or commands. It's purel
 - Write directly to files during rendering
 - `text()` function closes the file
 
-**Memory-based terminals** (wxlua):
+**Memory-based terminals** (luacmd):
 - Store drawing commands in memory
 - Application retrieves commands after plotting
 - Allows custom rendering
 
 ---
 
-## wxLua Terminal Implementation
+## luacmd Terminal Implementation
 
-The wxLua terminal is a custom terminal that captures gnuplot's drawing commands for rendering with wxWidgets.
+The luacmd terminal is a custom terminal that captures gnuplot's drawing commands for rendering with any Lua graphics library.
 
 ### Architecture
 
 ```
 Gnuplot plot command
     ↓
-wxLua terminal driver (term/wxlua.trm)
+luacmd terminal driver (term/luacmd.trm)
     ↓
 Command queue (stored in libgnuplot.c)
     ↓
 Lua retrieves via gnuplot.get_commands()
     ↓
-wxWidgets rendering (wxDC, wxGraphicsContext)
+Rendering with any Lua library (wxWidgets, Cairo, SVG, JSON, etc.)
 ```
 
 ### Implementation Details
 
-**Location**: `gnuplot-source/term/wxlua.trm`
+**Location**: `gnuplot-source/term/luacmd.trm`
 
 **Key Features**:
 1. **Command Capture**: Instead of rendering directly, stores commands in a queue
 2. **Memory Management**: Commands stored in global buffer accessible from Lua
-3. **Canvas Size**: Configurable via `set terminal wxlua size WIDTH,HEIGHT`
+3. **Canvas Size**: Configurable via `set terminal luacmd size WIDTH,HEIGHT`
+4. **Flexible Rendering**: Commands can be rendered with any Lua graphics library
 
 **Command Structure**:
 ```c
@@ -282,7 +283,7 @@ typedef struct {
     char *text;         // For TEXT commands
     int color;          // For COLOR commands (0xRRGGBB)
     double value;       // For LINEWIDTH, TEXT_ANGLE
-} wxlua_command;
+} luacmd_command;
 ```
 
 **Command Types**:
@@ -301,9 +302,9 @@ typedef struct {
 #define CMD_SET_FONT        11
 ```
 
-### wxLua Rendering Optimizations
+### Rendering Optimizations
 
-The `wxlua_plot_perfect.lua` example demonstrates several rendering optimizations:
+The `wxlua_plot_perfect.lua` example demonstrates several rendering optimizations when using wxLua/wxWidgets:
 
 **1. Path Accumulation**
 Instead of drawing individual line segments, accumulate consecutive vectors into paths:
@@ -601,19 +602,19 @@ END_PLOT
 
 ### Advanced: Memory-Based Terminal with Lua Access
 
-To create a terminal like wxlua that stores data for Lua retrieval:
+To create a terminal like luacmd that stores data for Lua retrieval:
 
 1. **Store commands in global buffer** (libgnuplot.c)
 2. **Add Lua binding** (lua_gnuplot.c)
 3. **Implement getter function** similar to `get_commands()`
 
-See the wxlua terminal implementation in `term/wxlua.trm` for a complete example.
+See the wxlua terminal implementation in `term/luacmd.trm` for a complete example.
 
 ---
 
 ## Performance Considerations
 
-### wxLua Terminal Performance
+### luacmd Terminal Performance
 
 **Typical plot with 500 samples:**
 - Command generation: <10ms

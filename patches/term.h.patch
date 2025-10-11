@@ -4,8 +4,8 @@
  /* Roland Rust's unixplot driver */
  #include "unixplot.trm"
 
-+/* wxLua command capture terminal */
-+#include "wxlua.trm"
++/* Lua command capture terminal */
++#include "luacmd.trm"
 +
  /* wire printers */
  #ifdef IMAGEN

@@ -8,7 +8,7 @@ Instead of using gnuplot as a terminal application, this modification allows you
 - Compile gnuplot as a shared library (`libgnuplot.so` or `libgnuplot.dll`)
 - Use gnuplot directly from Lua scripts via the `gnuplot` module
 - Pass gnuplot commands as strings to generate plots
-- Access plot data directly (wxLua terminal, RGB data)
+- Access plot data directly (luacmd terminal, RGB data)
 
 ## Project Structure
 
@@ -19,22 +19,23 @@ Instead of using gnuplot as a terminal application, this modification allows you
 │   ├── API.md                # Lua module API reference
 │   └── ADVANCED.md           # Advanced topics and terminal architecture
 ├── terminal/                 # Custom terminal drivers
-│   └── wxlua.trm             # wxLua terminal implementation
+│   └── wxlua.trm             # luacmd terminal implementation
 ├── src/                      # Library wrapper code
 │   ├── libgnuplot.h          # Library interface header
-│   └── libgnuplot.c          # Library implementation
+│   ├── libgnuplot.c          # Library implementation
+│   └── wxgnuplot.lua         # Reusable plot widget module
 ├── patches/                  # Patches for gnuplot source
 │   ├── README.md             # Patch documentation
-│   └── term.h.patch          # Adds wxlua terminal to term.h
+│   └── term.h.patch          # Adds luacmd terminal to term.h
 ├── examples/                 # Example Lua scripts
 │   ├── examples.lua          # Basic usage examples
-│   └── wxlua_plot_perfect.lua # wxLua terminal demo (optimized rendering)
+│   ├── wxlua_plot_perfect.lua # luacmd terminal demo (optimized rendering)
+│   └── wxgnuplot_demo.lua    # wxgnuplot widget demonstration
 ├── build/                    # Build artifacts (created by build.sh)
 │   ├── inc/                  # Lua headers (for Windows/MinGW)
 │   ├── lib/                  # Lua libraries (for Windows/MinGW)
 │   ├── config/               # Generated config.h
 │   └── *.o                   # Compiled object files
-├── gnuplot-source/           # Gnuplot source (cloned by build.sh)
 ├── lua_gnuplot.c             # Lua bindings for libgnuplot
 ├── build.sh                  # Build script (Linux and Windows/MinGW)
 ├── libgnuplot.so             # Compiled gnuplot library
@@ -158,7 +159,7 @@ local gnuplot = require("gnuplot")
 local wx = require("wx")
 
 gnuplot.init()
-gnuplot.cmd("set terminal wxlua size 1000,700")
+gnuplot.cmd("set terminal luacmd size 1000,700")
 gnuplot.cmd("set title 'Interactive Plot'")
 gnuplot.cmd("plot sin(x), cos(x)")
 
@@ -169,6 +170,51 @@ gnuplot.close()
 -- Render to wxLua window
 -- (See examples/wxlua_plot_perfect.lua for complete example)
 ```
+
+### 4. Using wxgnuplot Widget (Reusable GUI Component)
+
+The `wxgnuplot` module provides a reusable plotting widget that can be embedded in any wxLua application:
+
+```lua
+package.path = package.path .. ";./src/?.lua"
+local wx = require("wx")
+local wxgnuplot = require("wxgnuplot")
+
+-- Create frame
+local frame = wx.wxFrame(wx.NULL, wx.wxID_ANY, "My Application")
+local panel = wx.wxPanel(frame, wx.wxID_ANY)
+
+-- Create sizer
+local sizer = wx.wxBoxSizer(wx.wxVERTICAL)
+
+-- Create plot widget
+local plot = wxgnuplot.new(panel, wx.wxID_ANY, wx.wxDefaultPosition,
+                           wx.wxSize(800, 600))
+
+-- Add plot to sizer (expands with window)
+sizer:Add(plot:getPanel(), 1, wx.wxEXPAND + wx.wxALL, 10)
+
+-- Add your other controls here...
+-- sizer:Add(button, 0, wx.wxALL, 5)
+
+panel:SetSizer(sizer)
+
+-- Configure and execute plot
+plot:cmd("set title 'Embedded Plot'")
+plot:cmd("plot sin(x)")
+plot:execute()
+
+frame:Show(true)
+wx.wxGetApp():MainLoop()
+```
+
+**Key Features:**
+- Automatically resizes with window
+- Can be placed in sizers like any wxWidgets control
+- Command stacking for flexible plotting
+- Perfect for dashboards, data analysis tools, and scientific GUIs
+
+See `examples/wxgnuplot_demo.lua` for a complete demonstration.
 
 ## Available Terminals
 
@@ -216,7 +262,7 @@ set LUA_CPATH=./?.dll;;
 ## Documentation
 
 - **[API Reference](docs/API.md)** - Complete Lua module API documentation
-- **[Advanced Topics](docs/ADVANCED.md)** - Terminal architecture, RGB feature, wxLua terminal
+- **[Advanced Topics](docs/ADVANCED.md)** - Terminal architecture, RGB feature, luacmd terminal
 
 ## License
 
@@ -226,4 +272,4 @@ This project uses the gnuplot source code, which is licensed under the gnuplot l
 
 - **Gnuplot** - Original plotting software (http://www.gnuplot.info/)
 - **Lua bindings** - Custom wrapper for library integration
-- **wxLua terminal** - Custom terminal for direct GUI rendering
+- **luacmd terminal** - Custom terminal for direct GUI rendering

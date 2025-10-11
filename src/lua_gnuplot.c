@@ -172,17 +172,17 @@ static int l_gnuplot_get_rgb_data(lua_State *L)
 }
 
 /* Lua: gnuplot.get_commands()
- * Returns drawing commands captured by wxlua terminal
+ * Returns drawing commands captured by luacmd terminal
  * Returns: {width=N, height=M, commands={{type=0, x=100, y=200, ...}, ...}}
  */
 static int l_gnuplot_get_commands(lua_State *L)
 {
     int count, width, height;
-    wxlua_command_t *commands = wxlua_get_commands(&count, &width, &height);
+    luacmd_command_t *commands = luacmd_get_commands(&count, &width, &height);
 
     if (!commands || count == 0) {
         lua_pushnil(L);
-        lua_pushstring(L, "No commands available. Use 'set terminal wxlua' and plot something first.");
+        lua_pushstring(L, "No commands available. Use 'set terminal luacmd' and plot something first.");
         return 2;
     }
 

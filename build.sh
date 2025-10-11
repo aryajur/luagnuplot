@@ -163,9 +163,9 @@ echo ""
 # Step 2: Apply our modifications to gnuplot source
 echo "Step 2: Applying custom modifications..."
 
-# Copy wxLua terminal
-echo "  Copying wxLua terminal..."
-cp terminal/wxlua.trm "$GNUPLOT_SRC_DIR/term/"
+# Copy luacmd terminal
+echo "  Copying luacmd terminal..."
+cp terminal/luacmd.trm "$GNUPLOT_SRC_DIR/term/"
 
 # Copy library wrapper files
 echo "  Copying library wrapper files..."
@@ -173,14 +173,14 @@ cp src/libgnuplot.h src/libgnuplot.c "$GNUPLOT_SRC_DIR/src/"
 
 # Note: We no longer copy winstubs files - not needed with correct build flags
 
-# Apply term.h patch to include wxlua terminal and disable post.trm
+# Apply term.h patch to include luacmd terminal and disable post.trm
 echo "  Patching term.h..."
 if ! grep -q "GNUPLOTMOD_PATCHED" "$GNUPLOT_SRC_DIR/src/term.h"; then
-    # Add wxLua terminal after dumb.trm
+    # Add luacmd terminal after dumb.trm
     sed -i '/dumb\.trm/a\
 \
-/* wxLua command capture terminal - GNUPLOTMOD_PATCHED */\
-#include "wxlua.trm"' "$GNUPLOT_SRC_DIR/src/term.h"
+/* Lua command capture terminal - GNUPLOTMOD_PATCHED */\
+#include "luacmd.trm"' "$GNUPLOT_SRC_DIR/src/term.h"
 
     # Disable PostScript terminal (post.trm) - requires libgd or cairo
     sed -i 's|^#  include "post\.trm"|/* #  include "post.trm" */ /* Disabled - requires HAVE_GD_PNG or HAVE_CAIROPDF */|' "$GNUPLOT_SRC_DIR/src/term.h"
@@ -192,7 +192,7 @@ if ! grep -q "GNUPLOTMOD_PATCHED" "$GNUPLOT_SRC_DIR/src/term.h"; then
     # Disable tkcanvas terminal (tkcanvas.trm) - uses ftruncate which is not available on Windows
     sed -i 's|^#include "tkcanvas\.trm"|/* #include "tkcanvas.trm" */ /* Disabled - uses ftruncate (POSIX only) */|' "$GNUPLOT_SRC_DIR/src/term.h"
 
-    echo "  ✓ term.h patched (added wxlua terminal, disabled post.trm, pslatex.trm, tkcanvas.trm)"
+    echo "  ✓ term.h patched (added luacmd terminal, disabled post.trm, pslatex.trm, tkcanvas.trm)"
 else
     echo "  ✓ term.h already patched"
 fi

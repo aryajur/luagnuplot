@@ -71,7 +71,7 @@ GNUPLOT_API void* gnuplot_get_saved_bitmap_data(void);
 /* Free the saved bitmap data buffer */
 GNUPLOT_API void gnuplot_free_saved_bitmap(void);
 
-/* wxLua terminal command capture functions */
+/* luacmd terminal command capture functions */
 typedef struct {
     int type;          /* Command type (move, vector, text, etc.) */
     int x1, y1;       /* Primary coordinates */
@@ -79,24 +79,24 @@ typedef struct {
     char *text;       /* Text string (for text commands) */
     unsigned int color; /* RGB color value */
     double value;     /* Generic value (linewidth, angle, etc.) */
-} wxlua_command_t;
+} luacmd_command_t;
 
 /* Add a drawing command to the buffer */
-GNUPLOT_API void wxlua_add_command(int type, int x1, int y1, int x2, int y2,
+GNUPLOT_API void luacmd_add_command(int type, int x1, int y1, int x2, int y2,
                       const char *text, unsigned int color, double value);
 
 /* Clear all commands */
-GNUPLOT_API void wxlua_clear_commands(void);
+GNUPLOT_API void luacmd_clear_commands(void);
 
 /* Mark beginning/end of plot */
-GNUPLOT_API void wxlua_begin_plot(int width, int height);
-GNUPLOT_API void wxlua_end_plot(void);
+GNUPLOT_API void luacmd_begin_plot(int width, int height);
+GNUPLOT_API void luacmd_end_plot(void);
 
 /* Get all commands (returns array and count) */
-GNUPLOT_API wxlua_command_t* wxlua_get_commands(int *count, int *width, int *height);
+GNUPLOT_API luacmd_command_t* luacmd_get_commands(int *count, int *width, int *height);
 
-/* Free commands array returned by wxlua_get_commands */
-GNUPLOT_API void wxlua_free_commands(wxlua_command_t *commands);
+/* Free commands array returned by luacmd_get_commands */
+GNUPLOT_API void luacmd_free_commands(luacmd_command_t *commands);
 
 #ifdef __cplusplus
 }

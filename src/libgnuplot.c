@@ -343,26 +343,26 @@ void gnuplot_free_saved_bitmap(void)
     }
 }
 
-/* wxLua terminal command capture implementation */
-static wxlua_command_t *command_buffer = NULL;
+/* luacmd terminal command capture implementation */
+static luacmd_command_t *command_buffer = NULL;
 static int command_count = 0;
 static int command_capacity = 0;
 static int plot_width = 800;
 static int plot_height = 600;
 
-void wxlua_begin_plot(int width, int height)
+void luacmd_begin_plot(int width, int height)
 {
     plot_width = width;
     plot_height = height;
-    wxlua_clear_commands();
+    luacmd_clear_commands();
 }
 
-void wxlua_end_plot(void)
+void luacmd_end_plot(void)
 {
     /* Plot is complete, commands are ready to be retrieved */
 }
 
-void wxlua_clear_commands(void)
+void luacmd_clear_commands(void)
 {
     /* Free all text strings */
     for (int i = 0; i < command_count; i++) {
@@ -375,14 +375,14 @@ void wxlua_clear_commands(void)
     command_count = 0;
 }
 
-void wxlua_add_command(int type, int x1, int y1, int x2, int y2,
+void luacmd_add_command(int type, int x1, int y1, int x2, int y2,
                       const char *text, unsigned int color, double value)
 {
     /* Grow buffer if needed */
     if (command_count >= command_capacity) {
         command_capacity = (command_capacity == 0) ? 1024 : command_capacity * 2;
-        command_buffer = (wxlua_command_t *)realloc(command_buffer,
-                                                     command_capacity * sizeof(wxlua_command_t));
+        command_buffer = (luacmd_command_t *)realloc(command_buffer,
+                                                     command_capacity * sizeof(luacmd_command_t));
         if (!command_buffer) {
             command_count = 0;
             command_capacity = 0;
@@ -391,7 +391,7 @@ void wxlua_add_command(int type, int x1, int y1, int x2, int y2,
     }
 
     /* Add command */
-    wxlua_command_t *cmd = &command_buffer[command_count++];
+    luacmd_command_t *cmd = &command_buffer[command_count++];
     cmd->type = type;
     cmd->x1 = x1;
     cmd->y1 = y1;
@@ -402,7 +402,7 @@ void wxlua_add_command(int type, int x1, int y1, int x2, int y2,
     cmd->value = value;
 }
 
-wxlua_command_t* wxlua_get_commands(int *count, int *width, int *height)
+luacmd_command_t* luacmd_get_commands(int *count, int *width, int *height)
 {
     *count = command_count;
     *width = plot_width;
@@ -413,7 +413,7 @@ wxlua_command_t* wxlua_get_commands(int *count, int *width, int *height)
         return NULL;
     }
 
-    wxlua_command_t *copy = (wxlua_command_t *)malloc(command_count * sizeof(wxlua_command_t));
+    luacmd_command_t *copy = (luacmd_command_t *)malloc(command_count * sizeof(luacmd_command_t));
     if (!copy) {
         return NULL;
     }
@@ -427,7 +427,7 @@ wxlua_command_t* wxlua_get_commands(int *count, int *width, int *height)
     return copy;
 }
 
-void wxlua_free_commands(wxlua_command_t *commands)
+void luacmd_free_commands(luacmd_command_t *commands)
 {
     if (!commands) {
         return;
