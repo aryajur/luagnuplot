@@ -1,0 +1,12 @@
+--- term.h.orig	2025-01-01 00:00:00.000000000 +0000
++++ term.h	2025-01-01 00:00:00.000000000 +0000
+@@ -303,6 +303,9 @@
+ /* Roland Rust's unixplot driver */
+ #include "unixplot.trm"
+
++/* wxLua command capture terminal */
++#include "wxlua.trm"
++
+ /* wire printers */
+ #ifdef IMAGEN
+ # include "imagen.trm"

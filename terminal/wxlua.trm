@@ -1,0 +1,315 @@
+/* GNUPLOT - wxlua.trm */
+
+/*[
+ * Copyright 2025
+ *
+ * Permission to use, copy, and distribute this software and its
+ * documentation for any purpose with or without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and
+ * that both that copyright notice and this permission notice appear
+ * in supporting documentation.
+ *
+ * This software is provided "as is" without express or implied warranty
+ * to the extent permitted by applicable law.
+]*/
+
+/*
+ * This terminal captures drawing commands and makes them available
+ * to Lua for rendering with wxLua/wxDC. This provides high-quality
+ * output without file I/O.
+ */
+
+#include "driver.h"
+
+#ifdef TERM_REGISTER
+register_term(wxlua)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void WXLUA_options(void);
+TERM_PUBLIC void WXLUA_init(void);
+TERM_PUBLIC void WXLUA_graphics(void);
+TERM_PUBLIC void WXLUA_text(void);
+TERM_PUBLIC void WXLUA_reset(void);
+TERM_PUBLIC void WXLUA_linetype(int linetype);
+TERM_PUBLIC void WXLUA_move(unsigned int x, unsigned int y);
+TERM_PUBLIC void WXLUA_vector(unsigned int x, unsigned int y);
+TERM_PUBLIC void WXLUA_put_text(unsigned int x, unsigned int y, const char *str);
+TERM_PUBLIC void WXLUA_set_color(t_colorspec *colorspec);
+TERM_PUBLIC void WXLUA_linewidth(double linewidth);
+TERM_PUBLIC void WXLUA_point(unsigned int x, unsigned int y, int pointstyle);
+TERM_PUBLIC void WXLUA_fillbox(int style, unsigned int x1, unsigned int y1,
+                                unsigned int width, unsigned int height);
+TERM_PUBLIC void WXLUA_filled_polygon(int n, gpiPoint *corners);
+TERM_PUBLIC int WXLUA_justify_text(enum JUSTIFY mode);
+TERM_PUBLIC int WXLUA_text_angle(float ang);
+TERM_PUBLIC int WXLUA_set_font(const char *font);
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
+/* Forward declare command capture functions from libgnuplot */
+extern void wxlua_add_command(int type, int x1, int y1, int x2, int y2,
+                              const char *text, unsigned int color, double value);
+extern void wxlua_clear_commands(void);
+extern void wxlua_begin_plot(int width, int height);
+extern void wxlua_end_plot(void);
+
+/* Terminal state */
+static int wxlua_width = 800;
+static int wxlua_height = 600;
+static unsigned int wxlua_current_x = 0;
+static unsigned int wxlua_current_y = 0;
+static unsigned int wxlua_current_color = 0x000000;
+static double wxlua_current_linewidth = 1.0;
+static int wxlua_current_linetype = 0;
+
+/* Command types - must match Lua side */
+#define WXLUA_CMD_MOVE 0
+#define WXLUA_CMD_VECTOR 1
+#define WXLUA_CMD_TEXT 2
+#define WXLUA_CMD_COLOR 3
+#define WXLUA_CMD_LINEWIDTH 4
+#define WXLUA_CMD_LINETYPE 5
+#define WXLUA_CMD_POINT 6
+#define WXLUA_CMD_FILLBOX 7
+#define WXLUA_CMD_FILLED_POLYGON 8
+#define WXLUA_CMD_TEXT_ANGLE 9
+#define WXLUA_CMD_JUSTIFY 10
+#define WXLUA_CMD_SET_FONT 11
+
+TERM_PUBLIC void
+WXLUA_options(void)
+{
+    while (!END_OF_COMMAND) {
+        if (almost_equals(c_token, "s$ize")) {
+            c_token++;
+            if (END_OF_COMMAND) {
+                int_error(c_token, "size requires 'width,height'");
+            }
+            wxlua_width = (int)real_expression();
+            if (!equals(c_token++, ",")) {
+                int_error(c_token, "size requires 'width,height'");
+            }
+            wxlua_height = (int)real_expression();
+        } else {
+            int_error(c_token, "unrecognized option");
+        }
+    }
+
+    sprintf(term_options, "size %d,%d", wxlua_width, wxlua_height);
+}
+
+TERM_PUBLIC void
+WXLUA_init(void)
+{
+    /* Nothing to initialize */
+}
+
+TERM_PUBLIC void
+WXLUA_graphics(void)
+{
+    /* Clear previous commands and start new plot */
+    wxlua_clear_commands();
+    wxlua_begin_plot(wxlua_width, wxlua_height);
+
+    wxlua_current_x = 0;
+    wxlua_current_y = 0;
+    wxlua_current_color = 0x000000;
+    wxlua_current_linewidth = 1.0;
+}
+
+TERM_PUBLIC void
+WXLUA_text(void)
+{
+    /* Mark end of plot */
+    wxlua_end_plot();
+}
+
+TERM_PUBLIC void
+WXLUA_reset(void)
+{
+    /* Cleanup */
+    wxlua_clear_commands();
+}
+
+TERM_PUBLIC void
+WXLUA_linetype(int linetype)
+{
+    wxlua_current_linetype = linetype;
+    wxlua_add_command(WXLUA_CMD_LINETYPE, linetype, 0, 0, 0, NULL, 0, 0.0);
+}
+
+TERM_PUBLIC void
+WXLUA_move(unsigned int x, unsigned int y)
+{
+    wxlua_current_x = x;
+    wxlua_current_y = term->ymax - y;  /* Flip Y coordinate */
+
+    wxlua_add_command(WXLUA_CMD_MOVE, wxlua_current_x, wxlua_current_y,
+                     0, 0, NULL, 0, 0.0);
+}
+
+TERM_PUBLIC void
+WXLUA_vector(unsigned int x, unsigned int y)
+{
+    unsigned int new_x = x;
+    unsigned int new_y = term->ymax - y;  /* Flip Y coordinate */
+
+    wxlua_add_command(WXLUA_CMD_VECTOR, new_x, new_y,
+                     wxlua_current_x, wxlua_current_y, NULL, wxlua_current_color, wxlua_current_linewidth);
+
+    wxlua_current_x = new_x;
+    wxlua_current_y = new_y;
+}
+
+TERM_PUBLIC void
+WXLUA_put_text(unsigned int x, unsigned int y, const char *str)
+{
+    unsigned int flipped_y = term->ymax - y;
+    wxlua_add_command(WXLUA_CMD_TEXT, x, flipped_y, 0, 0, str, wxlua_current_color, 0.0);
+}
+
+TERM_PUBLIC void
+WXLUA_set_color(t_colorspec *colorspec)
+{
+    if (colorspec->type == TC_RGB) {
+        /* For TC_RGB, the RGB value is stored in lt field */
+        wxlua_current_color = (unsigned int)colorspec->lt;
+    } else if (colorspec->type == TC_LT) {
+        /* Map line type to color */
+        int lt = colorspec->lt;
+
+        /* Handle border/axis line types (negative values) */
+        if (lt < 0) {
+            wxlua_current_color = 0x000000;  /* Black for borders/axes */
+        } else {
+            /* Map positive line types to plot colors */
+            static unsigned int lt_colors[] = {
+                0xFF0000, 0x00FF00, 0x0000FF, 0xFF00FF,
+                0x00FFFF, 0xFFFF00, 0x000000, 0xFFFFFF
+            };
+            if (lt < 8) {
+                wxlua_current_color = lt_colors[lt];
+            } else {
+                wxlua_current_color = 0x000000;  /* Default to black */
+            }
+        }
+    }
+
+    wxlua_add_command(WXLUA_CMD_COLOR, 0, 0, 0, 0, NULL, wxlua_current_color, 0.0);
+}
+
+TERM_PUBLIC void
+WXLUA_linewidth(double linewidth)
+{
+    wxlua_current_linewidth = linewidth;
+    wxlua_add_command(WXLUA_CMD_LINEWIDTH, 0, 0, 0, 0, NULL, 0, linewidth);
+}
+
+TERM_PUBLIC void
+WXLUA_point(unsigned int x, unsigned int y, int pointstyle)
+{
+    unsigned int flipped_y = term->ymax - y;
+    wxlua_add_command(WXLUA_CMD_POINT, x, flipped_y, 0, 0, NULL, wxlua_current_color, (double)pointstyle);
+}
+
+TERM_PUBLIC void
+WXLUA_fillbox(int style, unsigned int x1, unsigned int y1,
+              unsigned int width, unsigned int height)
+{
+    unsigned int flipped_y = term->ymax - y1 - height;
+    wxlua_add_command(WXLUA_CMD_FILLBOX, x1, flipped_y, width, height, NULL, wxlua_current_color, (double)style);
+}
+
+TERM_PUBLIC void
+WXLUA_filled_polygon(int n, gpiPoint *corners)
+{
+    /* For now, store as a series of points in a special command */
+    /* This is simplified - a real implementation would store all points */
+    if (n > 0) {
+        unsigned int flipped_y = term->ymax - corners[0].y;
+        wxlua_add_command(WXLUA_CMD_FILLED_POLYGON, corners[0].x, flipped_y, n, 0, NULL, wxlua_current_color, 0.0);
+    }
+}
+
+TERM_PUBLIC int
+WXLUA_justify_text(enum JUSTIFY mode)
+{
+    wxlua_add_command(WXLUA_CMD_JUSTIFY, (int)mode, 0, 0, 0, NULL, 0, 0.0);
+    return TRUE;
+}
+
+TERM_PUBLIC int
+WXLUA_text_angle(float ang)
+{
+    wxlua_add_command(WXLUA_CMD_TEXT_ANGLE, 0, 0, 0, 0, NULL, 0, (double)ang);
+    return TRUE;
+}
+
+TERM_PUBLIC int
+WXLUA_set_font(const char *font)
+{
+    wxlua_add_command(WXLUA_CMD_SET_FONT, 0, 0, 0, 0, font, 0, 0.0);
+    return TRUE;
+}
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(wxlua_driver)
+    "wxlua", "wxLua terminal with command capture for high-quality rendering",
+    800 /* xmax */, 600 /* ymax */, 14 /* vchar */, 8 /* hchar */,
+    5 /* vtic */, 5 /* htic */,
+    WXLUA_options, WXLUA_init, WXLUA_reset, WXLUA_text,
+    null_scale, WXLUA_graphics, WXLUA_move, WXLUA_vector,
+    WXLUA_linetype, WXLUA_put_text, WXLUA_text_angle,
+    WXLUA_justify_text, WXLUA_point, do_arrow, WXLUA_set_font,
+    do_pointsize,
+    TERM_CAN_MULTIPLOT | TERM_LINEWIDTH | TERM_FONTSCALE,
+    0 /* suspend */, 0 /* resume */,
+    WXLUA_fillbox, WXLUA_linewidth,
+#ifdef USE_MOUSE
+    0, 0, 0, 0, 0,
+#endif
+    0 /* make_palette */, 0 /* previous_palette */,
+    WXLUA_set_color, WXLUA_filled_polygon
+TERM_TABLE_END(wxlua_driver)
+
+#undef LAST_TERM
+#define LAST_TERM wxlua_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(wxlua)
+"1 wxlua",
+"?commands set terminal wxlua",
+"?set terminal wxlua",
+"?set term wxlua",
+"?terminal wxlua",
+"?term wxlua",
+"?wxlua",
+" The `wxlua` terminal captures drawing commands for rendering with wxLua.",
+" This provides high-quality anti-aliased output without any file I/O.",
+"",
+" Syntax:",
+"       set terminal wxlua {size <width>,<height>}",
+"",
+" The size defaults to 800x600 pixels.",
+"",
+" After plotting, use gnuplot.get_commands() in Lua to retrieve the drawing",
+" commands, then render them using wxDC or wxGraphicsContext.",
+"",
+" Example:",
+"       set terminal wxlua size 1000,700",
+"       plot sin(x)",
+"       # In Lua: local commands = gp.get_commands()",
+"",
+" The commands include move, vector (line), text, color, linewidth, etc.",
+" See the wxLua examples for complete rendering code."
+END_HELP(wxlua)
+#endif /* TERM_HELP */
