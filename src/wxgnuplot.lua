@@ -188,6 +188,14 @@ local function render_commands(commands, width, height)
             if path_active then flush_path() end
             memDC:DrawCircle(cmd.x, cmd.y, 2)
 
+        elseif cmd.type == CMD_FILLBOX then
+            if path_active then flush_path() end
+            -- Draw a filled rectangle
+            -- cmd.x = x, cmd.y = y, cmd.x2 = width, cmd.y2 = height
+            local brush = wx.wxBrush(pen_color, wx.wxBRUSHSTYLE_SOLID)
+            memDC:SetBrush(brush)
+            memDC:DrawRectangle(cmd.x, cmd.y, cmd.x2, cmd.y2)
+
         elseif cmd.type == CMD_JUSTIFY then
             text_justify = cmd.x
 

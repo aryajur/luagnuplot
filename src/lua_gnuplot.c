@@ -210,7 +210,8 @@ static int l_gnuplot_get_commands(lua_State *L)
         lua_pushinteger(L, commands[i].y1);
         lua_setfield(L, -2, "y");
 
-        if (commands[i].type == 1) {  /* VECTOR command has x2, y2 */
+        /* VECTOR (type 1) and FILLBOX (type 7) commands have x2, y2 */
+        if (commands[i].type == 1 || commands[i].type == 7) {
             lua_pushinteger(L, commands[i].x2);
             lua_setfield(L, -2, "x2");
 
