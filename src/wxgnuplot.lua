@@ -257,6 +257,9 @@ function wxgnuplot.new(parent, id, pos, size)
         local new_width = client_size:GetWidth()
         local new_height = client_size:GetHeight()
 
+        --print(string.format("[RESIZE] Event fired: old=%dx%d, new=%dx%d",
+              plot.width, plot.height, new_width, new_height))
+
         -- Only re-render if size is valid and has changed
         if new_width > 0 and new_height > 0 and
            (new_width ~= plot.width or new_height ~= plot.height) then
@@ -265,13 +268,66 @@ function wxgnuplot.new(parent, id, pos, size)
 
             -- Re-execute plot commands with new size
             if #plot.commands > 0 then
+                --print("[RESIZE] Re-executing plot commands...")
                 plot:execute()
+                --print("[RESIZE] Plot re-rendered")
+            else
+                --print("[RESIZE] No commands to re-execute")
             end
+        else
+            --print("[RESIZE] Size unchanged or invalid, skipping re-render")
         end
 
         event:Skip()
     end)
+--[=[
+    -- Find top-level frame and add resize handler (needed for Linux)
+    -- On Linux, panel resize events may not fire reliably, so we also
+    -- monitor the parent frame's resize events
+    local function find_top_frame(widget)
+        local current = widget
+        while current do
+            local parent = current:GetParent()
+            if not parent then
+                -- Check if this is a frame
+                if current:DynamicCast("wxFrame") then
+                    return current
+                end
+                return nil
+            end
+            current = parent
+        end
+        return nil
+    end
 
+    local top_frame = find_top_frame(plot.panel)
+    if top_frame then
+        top_frame:Connect(wx.wxEVT_SIZE, function(event)
+            -- Check if panel size has changed
+            local client_size = plot.panel:GetClientSize()
+            local new_width = client_size:GetWidth()
+            local new_height = client_size:GetHeight()
+
+            print(string.format("[FRAME RESIZE] Checking panel: old=%dx%d, new=%dx%d",
+                  plot.width, plot.height, new_width, new_height))
+
+            if new_width > 0 and new_height > 0 and
+               (new_width ~= plot.width or new_height ~= plot.height) then
+                plot.width = new_width
+                plot.height = new_height
+
+                if #plot.commands > 0 then
+                    print("[FRAME RESIZE] Re-executing plot commands...")
+                    plot:execute()
+                    print("[FRAME RESIZE] Plot re-rendered")
+                end
+            end
+
+            event:Skip()
+        end)
+        print("[wxgnuplot] Connected to frame resize events for cross-platform compatibility")
+    end
+]=]
     -- Method: Get the wxPanel (for adding to sizers)
     function plot:getPanel()
         return self.panel
