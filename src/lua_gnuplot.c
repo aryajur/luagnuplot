@@ -171,6 +171,21 @@ static int l_gnuplot_get_rgb_data(lua_State *L)
     return 1;
 }
 
+/* Lua: gnuplot.set_datablock(name, data)
+ * Set datablock content directly (bypasses heredoc syntax)
+ * name: datablock name (can include $ or not)
+ * data: newline-separated data lines
+ * Example: gnuplot.set_datablock("$DATA", "1 2\n2 4\n3 6")
+ */
+static int l_gnuplot_set_datablock(lua_State *L)
+{
+    const char *name = luaL_checkstring(L, 1);
+    const char *data = luaL_checkstring(L, 2);
+    int result = gnuplot_set_datablock(name, data);
+    lua_pushboolean(L, result == 0);
+    return 1;
+}
+
 /* Lua: gnuplot.get_commands()
  * Returns drawing commands captured by luacmd terminal
  * Returns: {width=N, height=M, commands={{type=0, x=100, y=200, ...}, ...}}
@@ -264,6 +279,7 @@ static const struct luaL_Reg gnuplot_lib[] = {
     {"splot", l_gnuplot_splot},
     {"set", l_gnuplot_set},
     {"unset", l_gnuplot_unset},
+    {"set_datablock", l_gnuplot_set_datablock},
     {"get_rgb_data", l_gnuplot_get_rgb_data},
     {"get_commands", l_gnuplot_get_commands},
     {NULL, NULL}

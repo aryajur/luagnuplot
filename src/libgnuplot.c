@@ -22,6 +22,7 @@
 #include "fit.h"
 #include "gadgets.h"
 #include "standard.h"
+#include "datablock.h"
 
 #include <signal.h>
 #include <setjmp.h>
@@ -238,6 +239,55 @@ const char* gnuplot_get_version(void)
 int gnuplot_is_initialized(void)
 {
     return lib_initialized;
+}
+
+/* Set datablock content directly */
+int gnuplot_set_datablock(const char *name, const char *data)
+{
+    struct udvt_entry *datablock;
+    char *datablock_name;
+
+    if (!lib_initialized) {
+        return -1; /* Not initialized */
+    }
+
+    if (name == NULL || data == NULL) {
+        return -1; /* Invalid parameters */
+    }
+
+    /* Ensure name starts with $ */
+    if (name[0] == '$') {
+        datablock_name = gp_strdup(name);
+    } else {
+        /* Add $ prefix */
+        datablock_name = (char *)gp_alloc(strlen(name) + 2, "datablock name");
+        datablock_name[0] = '$';
+        strcpy(datablock_name + 1, name);
+    }
+
+    /* Create or get the datablock variable */
+    datablock = add_udv_by_name(datablock_name);
+
+    /* Initialize as empty datablock if not already one */
+    if (datablock->udv_value.type != DATABLOCK) {
+        free_value(&datablock->udv_value);
+        datablock->udv_value.type = DATABLOCK;
+        datablock->udv_value.v.data_array = NULL;
+    }
+
+    /* Clear existing data if any */
+    if (datablock->udv_value.v.data_array) {
+        gpfree_datablock(&datablock->udv_value);
+        datablock->udv_value.type = DATABLOCK;
+        datablock->udv_value.v.data_array = NULL;
+    }
+
+    /* Add the data using gnuplot's append_multiline function
+     * This handles newlines and creates the data_array properly */
+    append_multiline_to_datablock(&datablock->udv_value, gp_strdup(data));
+
+    free(datablock_name);
+    return 0;
 }
 
 /* Initialize memory (simplified version of init_memory from plot.c) */

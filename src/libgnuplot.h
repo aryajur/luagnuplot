@@ -54,6 +54,14 @@ GNUPLOT_API const char* gnuplot_get_version(void);
 /* Check if gnuplot is initialized */
 GNUPLOT_API int gnuplot_is_initialized(void);
 
+/* Set datablock content directly (bypasses heredoc syntax)
+ * name: datablock name (e.g., "$DATA")
+ * data: newline-separated data lines
+ * Returns 0 on success, non-zero on error
+ * Example: gnuplot_set_datablock("$DATA", "1 2\n2 4\n3 6")
+ */
+GNUPLOT_API int gnuplot_set_datablock(const char *name, const char *data);
+
 /* Save bitmap RGB data to a global buffer before it gets freed
  * This is called automatically by the PBM terminal text() function
  * Use with 'set terminal pbm color' followed by plot commands

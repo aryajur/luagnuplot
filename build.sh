@@ -5,7 +5,13 @@
 
 set -e  # Exit on error
 
+# Pinned gnuplot commit hash for reproducible builds
+# To update: Get latest hash with: git ls-remote https://github.com/gnuplot/gnuplot.git HEAD
+# Test the new version, then update this hash
+GNUPLOT_COMMIT="fbeb88eadedf927a4d778b41dd118e373f33eacb"
+
 echo "=== Building libgnuplot and Lua bindings ==="
+echo "Gnuplot commit: ${GNUPLOT_COMMIT:0:12}"
 echo ""
 
 # Detect platform
@@ -94,22 +100,37 @@ fi
 # Step 1: Clone or update gnuplot source into build directory
 GNUPLOT_SRC_DIR="$BUILD_DIR/gnuplot-source"
 
-# Check if directory exists and is a valid git repository
+# Check if directory exists and is at the correct commit
 if [ -d "$GNUPLOT_SRC_DIR" ]; then
     if [ -d "$GNUPLOT_SRC_DIR/.git" ] && [ -f "$GNUPLOT_SRC_DIR/src/gnuplot.h" ]; then
-        echo "Step 1: Gnuplot source already present in $BUILD_DIR/"
-    else
-        echo "Step 1: Detected incomplete gnuplot clone, cleaning up..."
-        rm -rf "$GNUPLOT_SRC_DIR"
-        echo "  Cloning gnuplot source to $BUILD_DIR/..."
+        # Check if we're at the correct commit
+        cd "$GNUPLOT_SRC_DIR"
+        CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        cd - > /dev/null
 
-        # Try to clone with retry logic
+        if [ "$CURRENT_COMMIT" = "$GNUPLOT_COMMIT" ]; then
+            echo "Step 1: Gnuplot source already present at correct commit"
+        else
+            echo "Step 1: Gnuplot source at different commit, updating..."
+            cd "$GNUPLOT_SRC_DIR"
+            git fetch origin "$GNUPLOT_COMMIT" && git checkout "$GNUPLOT_COMMIT"
+            cd - > /dev/null
+            echo "✓ Updated to commit ${GNUPLOT_COMMIT:0:12}"
+        fi
+    else
+        echo "Step 1: Detected incomplete gnuplot clone, re-cloning..."
+        rm -rf "$GNUPLOT_SRC_DIR"
+
+        # Clone and checkout specific commit
         MAX_RETRIES=3
         RETRY_COUNT=0
 
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            if git clone --depth 1 https://github.com/gnuplot/gnuplot.git "$GNUPLOT_SRC_DIR"; then
-                echo "✓ Gnuplot source cloned to $BUILD_DIR/"
+            if git clone https://github.com/gnuplot/gnuplot.git "$GNUPLOT_SRC_DIR" && \
+               cd "$GNUPLOT_SRC_DIR" && \
+               git checkout "$GNUPLOT_COMMIT" && \
+               cd - > /dev/null; then
+                echo "✓ Gnuplot source cloned at commit ${GNUPLOT_COMMIT:0:12}"
                 break
             else
                 RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -121,9 +142,9 @@ if [ -d "$GNUPLOT_SRC_DIR" ]; then
                     echo "✗ Failed to clone gnuplot source after $MAX_RETRIES attempts"
                     echo ""
                     echo "Please manually clone the gnuplot repository:"
-                    echo "  git clone --depth 1 https://github.com/gnuplot/gnuplot.git $GNUPLOT_SRC_DIR"
+                    echo "  git clone https://github.com/gnuplot/gnuplot.git $GNUPLOT_SRC_DIR"
+                    echo "  cd $GNUPLOT_SRC_DIR && git checkout $GNUPLOT_COMMIT"
                     echo ""
-                    echo "Or download and extract the source to $GNUPLOT_SRC_DIR/"
                     exit 1
                 fi
             fi
@@ -132,13 +153,16 @@ if [ -d "$GNUPLOT_SRC_DIR" ]; then
 else
     echo "Step 1: Cloning gnuplot source to $BUILD_DIR/..."
 
-    # Try to clone with retry logic
+    # Clone and checkout specific commit
     MAX_RETRIES=3
     RETRY_COUNT=0
 
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        if git clone --depth 1 https://github.com/gnuplot/gnuplot.git "$GNUPLOT_SRC_DIR"; then
-            echo "✓ Gnuplot source cloned to $BUILD_DIR/"
+        if git clone https://github.com/gnuplot/gnuplot.git "$GNUPLOT_SRC_DIR" && \
+           cd "$GNUPLOT_SRC_DIR" && \
+           git checkout "$GNUPLOT_COMMIT" && \
+           cd - > /dev/null; then
+            echo "✓ Gnuplot source cloned at commit ${GNUPLOT_COMMIT:0:12}"
             break
         else
             RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -150,9 +174,9 @@ else
                 echo "✗ Failed to clone gnuplot source after $MAX_RETRIES attempts"
                 echo ""
                 echo "Please manually clone the gnuplot repository:"
-                echo "  git clone --depth 1 https://github.com/gnuplot/gnuplot.git $GNUPLOT_SRC_DIR"
+                echo "  git clone https://github.com/gnuplot/gnuplot.git $GNUPLOT_SRC_DIR"
+                echo "  cd $GNUPLOT_SRC_DIR && git checkout $GNUPLOT_COMMIT"
                 echo ""
-                echo "Or download and extract the source to $GNUPLOT_SRC_DIR/"
                 exit 1
             fi
         fi

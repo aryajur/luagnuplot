@@ -8,6 +8,14 @@
 --   plot:cmd("set title 'My Plot'")
 --   plot:cmd("plot sin(x)")
 --   plot:execute()
+--
+-- For data blocks (inline data), use set print:
+--   plot:cmd("set print $DATA")
+--   plot:cmd('print "1 2"')
+--   plot:cmd('print "2 4"')
+--   plot:cmd("set print")
+--   plot:cmd("plot $DATA with lines")
+--   plot:execute()
 
 local wxgnuplot = {}
 
@@ -232,6 +240,7 @@ function wxgnuplot.new(parent, id, pos, size)
         panel = nil,
         bitmap = nil,
         commands = {},
+        multiline_commands = {},  -- For data blocks and heredocs
         width = size:GetWidth(),
         height = size:GetHeight(),
         gnuplot = gnuplot,
@@ -258,7 +267,7 @@ function wxgnuplot.new(parent, id, pos, size)
         local new_height = client_size:GetHeight()
 
         --print(string.format("[RESIZE] Event fired: old=%dx%d, new=%dx%d",
-              plot.width, plot.height, new_width, new_height))
+        --      plot.width, plot.height, new_width, new_height))
 
         -- Only re-render if size is valid and has changed
         if new_width > 0 and new_height > 0 and
@@ -338,9 +347,17 @@ function wxgnuplot.new(parent, id, pos, size)
         table.insert(self.commands, command)
     end
 
+    -- Method: Add multi-line command block (for data blocks, heredocs, etc.)
+    -- This stores the multi-line commands to be executed during plot execution
+    -- Include the plot command with the data: plot:cmd_multi("$DATA << EOD\n1 2\n2 4\nEOD\nplot $DATA")
+    function plot:cmd_multi(commands)
+        -- Store multi-line commands to be executed before plotting
+        table.insert(self.multiline_commands, commands)
+    end
+
     -- Method: Execute all stacked commands and render
     function plot:execute()
-        if #self.commands == 0 then
+        if #self.commands == 0 and #self.multiline_commands == 0 then
             return false, "No commands to execute"
         end
 
@@ -350,18 +367,19 @@ function wxgnuplot.new(parent, id, pos, size)
             self.gnuplot_initialized = true
         end
 
-        -- Process commands and inject terminal size setting before plot commands
-        -- This ensures the plot is generated at the correct size
-        for i, cmd in ipairs(self.commands) do
-            -- Check if this is a plot command
-            local cmd_lower = cmd:lower():match("^%s*(%S+)")
-            if cmd_lower == "plot" or cmd_lower == "splot" or cmd_lower == "replot" then
-                -- Set terminal right before plot command
-                self.gnuplot.cmd(string.format("set terminal luacmd size %d,%d", self.width, self.height))
-            end
+        -- Set terminal first
+        self.gnuplot.cmd(string.format("set terminal luacmd size %d,%d", self.width, self.height))
 
+        -- Process regular commands (set commands) before data blocks
+        for i, cmd in ipairs(self.commands) do
             -- Execute the user command
             self.gnuplot.cmd(cmd)
+        end
+
+        -- Execute multi-line commands (data blocks + plot) last
+        -- Send as single command to preserve heredoc syntax
+        for i, multicmd in ipairs(self.multiline_commands) do
+            self.gnuplot.cmd(multicmd)
         end
 
         -- Get rendering commands
@@ -386,6 +404,7 @@ function wxgnuplot.new(parent, id, pos, size)
     -- Method: Clear command stack (keeps rendered plot)
     function plot:clear()
         self.commands = {}
+        self.multiline_commands = {}
     end
 
     -- Method: Force repaint
