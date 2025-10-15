@@ -33,10 +33,18 @@
 static int lib_initialized = 0;
 static JMP_BUF lib_command_line_env;
 
+/* Terminal text() hooking for auto-saving bitmap */
+static void (*original_term_text)(void) = NULL;
+static int term_hooked = 0;
+
 /* Forward declarations */
 static void init_memory_lib(void);
+static void hook_terminal_text(void);
+static void unhook_terminal_text(void);
+static void wrapped_term_text(void);
 
 /* External variables and functions from gnuplot */
+extern struct termentry *term;
 extern TBOOLEAN interactive;
 extern TBOOLEAN noinputfiles;
 extern TBOOLEAN successful_initialization;
@@ -63,6 +71,55 @@ lib_inter(int anint)
     /* In library mode, we don't jump back to command line on interrupt */
     /* Just reset and return */
     term_reset();
+}
+
+/* Wrapper for terminal text() that saves bitmap before freeing it */
+static void
+wrapped_term_text(void)
+{
+    /* Save bitmap data before the terminal frees it */
+    gnuplot_save_bitmap_data();
+
+    /* Call original text() function to output and free bitmap */
+    if (original_term_text) {
+        original_term_text();
+    }
+
+    /* Unhook after use (plot is done) */
+    unhook_terminal_text();
+}
+
+/* Hook the terminal's text() function to auto-save bitmap */
+static void
+hook_terminal_text(void)
+{
+    if (!term || term_hooked) {
+        return;  /* Already hooked or no terminal */
+    }
+
+    /* Save original function pointer */
+    original_term_text = term->text;
+
+    /* Replace with our wrapper */
+    term->text = wrapped_term_text;
+    term_hooked = 1;
+}
+
+/* Restore original terminal text() function */
+static void
+unhook_terminal_text(void)
+{
+    if (!term || !term_hooked) {
+        return;  /* Not hooked */
+    }
+
+    /* Restore original function */
+    if (original_term_text) {
+        term->text = original_term_text;
+    }
+
+    original_term_text = NULL;
+    term_hooked = 0;
 }
 
 /* Initialize gnuplot library */
@@ -149,12 +206,25 @@ int gnuplot_cmd(const char *command)
         return -1; /* Invalid command */
     }
 
+    /* Check if this is a plot/splot/replot command */
+    /* Hook terminal to auto-save bitmap before it gets freed */
+    const char *cmd_trimmed = command;
+    while (*cmd_trimmed == ' ' || *cmd_trimmed == '\t') cmd_trimmed++;
+
+    if (strncmp(cmd_trimmed, "plot ", 5) == 0 ||
+        strncmp(cmd_trimmed, "splot ", 6) == 0 ||
+        strncmp(cmd_trimmed, "replot", 6) == 0) {
+        hook_terminal_text();
+    }
+
     /* Use gnuplot's built-in command execution */
     if (!SETJMP(lib_command_line_env, 1)) {
         do_string(command);
         return 0;
     } else {
         /* Error occurred during command execution */
+        /* Make sure to unhook if error happened */
+        unhook_terminal_text();
         return -1;
     }
 }
@@ -309,8 +379,13 @@ static unsigned int saved_height = 0;
 /* Save bitmap RGB data - must be called while bitmap still exists */
 void* gnuplot_save_bitmap_data(void)
 {
-    /* Check if bitmap exists */
-    if (!b_p || b_xsize == 0 || b_ysize == 0) {
+    /* Verify we're using PBM terminal */
+    if (!term || !term->name || strcmp(term->name, "pbm") != 0) {
+        return NULL;  /* Not PBM terminal */
+    }
+
+    /* Check if bitmap exists (PBM terminal) */
+    if (!b_p || !(*b_p) || b_xsize == 0 || b_ysize == 0) {
         return NULL;
     }
 
@@ -376,14 +451,14 @@ void* gnuplot_save_bitmap_data(void)
     return saved_rgb_data;
 }
 
-/* Get the saved bitmap data (already saved by terminal) */
-void* gnuplot_get_saved_bitmap_data(void)
+/* Get the saved PBM bitmap data (already saved by terminal) */
+void* gnuplot_get_saved_pbm_rgb_data(void)
 {
     return saved_rgb_data;
 }
 
-/* Free saved bitmap data */
-void gnuplot_free_saved_bitmap(void)
+/* Free saved PBM bitmap data */
+void gnuplot_free_saved_pbm_bitmap(void)
 {
     if (saved_rgb_data) {
         free(saved_rgb_data);

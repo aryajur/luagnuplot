@@ -62,22 +62,24 @@ GNUPLOT_API int gnuplot_is_initialized(void);
  */
 GNUPLOT_API int gnuplot_set_datablock(const char *name, const char *data);
 
-/* Save bitmap RGB data to a global buffer before it gets freed
+/* Save PBM bitmap RGB data to a global buffer before it gets freed
  * This is called automatically by the PBM terminal text() function
+ * ONLY works with 'set terminal pbm color' - returns NULL for other terminals
  * Use with 'set terminal pbm color' followed by plot commands
  * Returns pointer to RGB data buffer, or NULL on error
  * The buffer contains width, height, and raw RGB bytes
  */
 GNUPLOT_API void* gnuplot_save_bitmap_data(void);
 
-/* Get the saved bitmap RGB data (already saved by terminal)
+/* Get the saved PBM bitmap RGB data (already saved by terminal)
  * Returns pointer to the saved RGB data buffer, or NULL if not available
  * The buffer contains width, height (as two unsigned ints), followed by raw RGB bytes
+ * ONLY works if PBM terminal was used
  */
-GNUPLOT_API void* gnuplot_get_saved_bitmap_data(void);
+GNUPLOT_API void* gnuplot_get_saved_pbm_rgb_data(void);
 
-/* Free the saved bitmap data buffer */
-GNUPLOT_API void gnuplot_free_saved_bitmap(void);
+/* Free the saved PBM bitmap data buffer */
+GNUPLOT_API void gnuplot_free_saved_pbm_bitmap(void);
 
 /* luacmd terminal command capture functions */
 typedef struct {

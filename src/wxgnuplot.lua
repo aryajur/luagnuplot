@@ -1,23 +1,84 @@
 -- wxgnuplot.lua
--- Reusable gnuplot plotting widget for wxLua applications
+-- Main module for gnuplot integration with wxLua
+-- Wraps the gnuplot module and provides plotting widgets
 --
--- Usage:
+-- Usage as wrapper:
 --   local wxgnuplot = require("wxgnuplot")
+--   wxgnuplot.init()
+--   wxgnuplot.cmd("plot sin(x)")
+--
+-- Usage as plot widget:
 --   local plot = wxgnuplot.new(parent, id, pos, size)
 --   sizer:Add(plot:getPanel(), 1, wx.wxEXPAND)
 --   plot:cmd("set title 'My Plot'")
 --   plot:cmd("plot sin(x)")
 --   plot:execute()
 --
--- For data blocks (inline data), use set print:
---   plot:cmd("set print $DATA")
---   plot:cmd('print "1 2"')
---   plot:cmd('print "2 4"')
---   plot:cmd("set print")
---   plot:cmd("plot $DATA with lines")
---   plot:execute()
+-- For data blocks, use set_datablock:
+--   wxgnuplot.set_datablock("$DATA", "1 2\n2 4\n3 6")
+--   wxgnuplot.cmd("plot $DATA with lines")
 
 local wxgnuplot = {}
+
+-- Load gnuplot module internally
+local gnuplot = require("gnuplot")
+
+-- Wrap core gnuplot functions for direct access
+wxgnuplot.init = gnuplot.init
+wxgnuplot.cmd = gnuplot.cmd
+wxgnuplot.cmd_multi = gnuplot.cmd_multi
+wxgnuplot.reset = gnuplot.reset
+wxgnuplot.close = gnuplot.close
+wxgnuplot.version = gnuplot.version
+wxgnuplot.is_initialized = gnuplot.is_initialized
+wxgnuplot.set_datablock = gnuplot.set_datablock
+wxgnuplot.get_pbm_rgb_data = gnuplot.get_pbm_rgb_data
+wxgnuplot.get_commands = gnuplot.get_commands
+
+-- Convenience functions
+function wxgnuplot.plot(expression, options)
+    return gnuplot.cmd(string.format("plot %s %s", expression, options or ""))
+end
+
+function wxgnuplot.splot(expression, options)
+    return gnuplot.cmd(string.format("splot %s %s", expression, options or ""))
+end
+
+function wxgnuplot.set(option)
+    return gnuplot.cmd("set " .. option)
+end
+
+function wxgnuplot.unset(option)
+    return gnuplot.cmd("unset " .. option)
+end
+
+-- Helper to plot to file with auto-init
+function wxgnuplot.plot_to_file(output_file, terminal, size, plot_commands)
+    if not gnuplot.is_initialized() then
+        gnuplot.init()
+    end
+
+    local w, h = size:match("(%d+)%s*,?x?%s*(%d+)")
+    if w and h then
+        gnuplot.cmd(string.format("set terminal %s size %s,%s", terminal, w, h))
+    else
+        gnuplot.cmd(string.format("set terminal %s", terminal))
+    end
+
+    gnuplot.cmd(string.format("set output '%s'", output_file))
+
+    -- Execute plot commands (can be string or table of strings)
+    if type(plot_commands) == "table" then
+        for _, cmd in ipairs(plot_commands) do
+            gnuplot.cmd(cmd)
+        end
+    else
+        gnuplot.cmd(plot_commands)
+    end
+
+    gnuplot.cmd("set output")
+    return output_file
+end
 
 -- Command type constants (from gnuplot terminal)
 local CMD_MOVE = 0
@@ -228,7 +289,6 @@ end
 -- size: wxSize size (optional, defaults to wx.wxSize(400, 300))
 -- Returns: plot object
 function wxgnuplot.new(parent, id, pos, size)
-    local gnuplot = require("gnuplot")
 
     -- Default parameters
     id = id or wx.wxID_ANY

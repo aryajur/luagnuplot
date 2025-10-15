@@ -126,22 +126,28 @@ static int l_gnuplot_unset(lua_State *L)
 }
 
 /* Forward declare libgnuplot functions */
-extern void* gnuplot_get_saved_bitmap_data(void);
-extern void gnuplot_free_saved_bitmap(void);
+extern void* gnuplot_save_bitmap_data(void);
+extern void* gnuplot_get_saved_pbm_rgb_data(void);
+extern void gnuplot_free_saved_pbm_bitmap(void);
 
-/* Lua: gnuplot.get_rgb_data()
- * Returns RGB data as a string of bytes (width, height, rgb_data)
- * Use after 'set terminal pbm color' and plotting
- * Call this after 'set output' to close the output and trigger bitmap save
+/* Lua: gnuplot.get_pbm_rgb_data()
+ * Returns RGB data as a table {width=N, height=M, data=<rgb bytes>}
+ * ONLY works with PBM terminal: 'set terminal pbm color size W,H'
+ * The bitmap is automatically saved by the terminal before it gets freed
+ * For PNG/GIF/JPEG output, write to a file instead.
  */
-static int l_gnuplot_get_rgb_data(lua_State *L)
+static int l_gnuplot_get_pbm_rgb_data(lua_State *L)
 {
-    /* Get the already-saved bitmap data (saved by terminal text() function) */
-    void *data_ptr = gnuplot_get_saved_bitmap_data();
+    /* Get the saved PBM bitmap data (auto-saved by terminal hook) */
+    void *data_ptr = gnuplot_get_saved_pbm_rgb_data();
 
     if (!data_ptr) {
         lua_pushnil(L);
-        lua_pushstring(L, "No bitmap data available. Use 'set terminal pbm color', plot something, then close output with 'set output' before calling this.");
+        lua_pushstring(L, "No PBM bitmap data available. Make sure to:\n"
+            "  1. Set PBM terminal: gnuplot.cmd('set terminal pbm color size W,H')\n"
+            "  2. Set output: gnuplot.cmd('set output \"/dev/null\"')\n"
+            "  3. Plot: gnuplot.cmd('plot sin(x)')\n"
+            "Note: This function ONLY works with PBM terminal, not PNG/GIF/JPEG.");
         return 2;
     }
 
@@ -280,7 +286,7 @@ static const struct luaL_Reg gnuplot_lib[] = {
     {"set", l_gnuplot_set},
     {"unset", l_gnuplot_unset},
     {"set_datablock", l_gnuplot_set_datablock},
-    {"get_rgb_data", l_gnuplot_get_rgb_data},
+    {"get_pbm_rgb_data", l_gnuplot_get_pbm_rgb_data},
     {"get_commands", l_gnuplot_get_commands},
     {NULL, NULL}
 };

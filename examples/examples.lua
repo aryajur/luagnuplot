@@ -1,13 +1,13 @@
 #!/usr/bin/env lua
--- Examples of using gnuplot from Lua
+-- Examples of using wxgnuplot from Lua
 
-local gp = require("gnuplot")
+local gp = require("wxgnuplot")
 
 -- Initialize
 gp.init()
 
-print("Gnuplot Lua Bindings - Examples")
-print("================================\n")
+print("wxgnuplot Module - Examples")
+print("===========================\n")
 
 -- Example 1: Simple function plot
 print("Example 1: Simple sine wave")
@@ -32,10 +32,7 @@ set xlabel 'x'
 set ylabel 'y'
 set grid
 set key top right
-plot [-2*pi:2*pi] \
-    sin(x) title 'sin(x)' with lines lw 2, \
-    cos(x) title 'cos(x)' with lines lw 2, \
-    sin(x)*cos(x) title 'sin(x)*cos(x)' with lines lw 2
+plot [-2*pi:2*pi] sin(x) title 'sin(x)' with lines lw 2, cos(x) title 'cos(x)' with lines lw 2, sin(x)*cos(x) title 'sin(x)*cos(x)' with lines lw 2
 ]])
 print("  → Created: example2_trig.png\n")
 
@@ -73,6 +70,14 @@ print("  → Created: example4_3d.png\n")
 
 -- Example 5: Data plot with inline data
 print("Example 5: Bar chart from data")
+-- Use set_datablock() instead of heredoc for reliability
+gp.set_datablock("$SALES", [[Jan 45
+Feb 52
+Mar 61
+Apr 58
+May 67
+Jun 72]])
+
 gp.cmd_multi([[
 set terminal png size 800,600
 set output 'example5_barchart.png'
@@ -83,14 +88,6 @@ set style data histograms
 set style fill solid
 set boxwidth 0.5
 set grid ytics
-$SALES << EOD
-Jan 45
-Feb 52
-Mar 61
-Apr 58
-May 67
-Jun 72
-EOD
 plot $SALES using 2:xtic(1) title 'Sales' linecolor rgb '#4285F4'
 ]])
 print("  → Created: example5_barchart.png\n")
@@ -119,8 +116,7 @@ set xlabel 'x'
 set ylabel 'y'
 set grid
 set style fill solid 0.3
-plot [0:2*pi] sin(x) with filledcurves y=0 title 'sin(x)', \
-              sin(x) with lines lw 2 linecolor rgb 'blue' notitle
+plot [0:2*pi] sin(x) with filledcurves y=0 title 'sin(x)', sin(x) with lines lw 2 linecolor rgb 'blue' notitle
 ]])
 print("  → Created: example7_filled.png\n")
 
